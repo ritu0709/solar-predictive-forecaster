@@ -21,24 +21,32 @@ plant_name = st.sidebar.selectbox(
 )
 forecast_horizon = st.sidebar.slider("Forecast Horizon (Weeks ahead)", min_value=12, max_value=52, value=52)
 
-# File path configuration
-file_path = "Solar_Energy_Production.csv"
+# TARGET CORES (Points strictly to your uploaded zip folder)
+file_path = "Solar_Energy_Production.zip"
 
 @st.cache_data
 def load_and_process_data(path, asset_name):
-    df = pd.read_csv(path)
+    # Read the CSV directly from inside the compressed zip folder
+    df = pd.read_csv(path, compression='zip')
+    
+    # Format the timeline index properly
     df['Timestamp'] = pd.to_datetime(df['date'], format='mixed')  
-    df_weekly = df.set_index('Timestamp').resample('W')[['kWh']].sum().fillna(0)
+    
+    # CRITICAL: Isolate the specific plant's data rows first
+    asset_df = df[df['name'] == asset_name]
+    
+    # Resample into clean weekly blocks
+    df_weekly = asset_df.set_index('Timestamp').resample('W')[['kWh']].sum().fillna(0)
     series_data = df_weekly.loc[df_weekly.index.year >= 2017]['kWh']
     return series_data
 
 if st.sidebar.button("Run Predictive Asset Audit"):
     with st.spinner("Executing multi-model time-series reduction rules..."):
         
-        # Ingest and sample data
+        # Ingest and clean data
         series_data = load_and_process_data(file_path, plant_name)
         
-        # Chronological Split based on user input
+        # Chronological Split
         fh = list(range(1, forecast_horizon + 1))
         train, test = temporal_train_test_split(series_data, test_size=forecast_horizon)
         
